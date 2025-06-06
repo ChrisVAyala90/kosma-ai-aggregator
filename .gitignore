@@ -1,0 +1,4 @@
+node_modules/
+.env
+dist/ # For frontend build output
+.DS_Store
