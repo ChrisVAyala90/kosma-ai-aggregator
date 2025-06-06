@@ -4,33 +4,133 @@ import axios from 'axios';
 import './App.css';
 
 function App() {
+  // Core app state
   const [healthStatus, setHealthStatus] = useState('');
   const [prompt, setPrompt] = useState('');
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showIndividual, setShowIndividual] = useState(false);
-  const [conversationHistory, setConversationHistory] = useState([]);
   const [isMobile, setIsMobile] = useState(false);
   const [showIndividualResponses, setShowIndividualResponses] = useState({});
+  
+  // Claude-style conversation management
+  const [conversations, setConversations] = useState([]);
+  const [currentConversationId, setCurrentConversationId] = useState(null);
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // Refs
   const chatContainerRef = useRef(null);
   const textareaRef = useRef(null);
 
   const API_BASE_URL = 'http://localhost:3001';
 
-  // Detect mobile device and screen size
+  // Detect mobile device and screen size with debouncing for smooth transitions
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  
   useEffect(() => {
+    let timeoutId;
+    
     const checkMobile = () => {
       const mobile = window.innerWidth <= 768;
       setIsMobile(mobile);
+      setWindowWidth(window.innerWidth);
+      // Auto-collapse sidebar on mobile
+      if (mobile) {
+        setSidebarCollapsed(true);
+      }
+    };
+    
+    const debouncedResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(checkMobile, 100); // Debounce for smoother transitions
     };
     
     checkMobile();
-    window.addEventListener('resize', checkMobile);
+    window.addEventListener('resize', debouncedResize);
     
-    return () => window.removeEventListener('resize', checkMobile);
+    return () => {
+      window.removeEventListener('resize', debouncedResize);
+      clearTimeout(timeoutId);
+    };
   }, []);
 
+  // Calculate responsive sidebar margin - Claude-style granular breakpoints
+  const getSidebarMargin = () => {
+    // Mobile uses transform positioning, no margin needed
+    if (isMobile || windowWidth <= 768) return '0px'; 
+    
+    if (sidebarCollapsed) {
+      // Granular collapsed widths
+      if (windowWidth >= 1400) return '60px';
+      if (windowWidth >= 1200) return '55px';
+      if (windowWidth >= 1024) return '50px';
+      if (windowWidth >= 900) return '45px';
+      return '40px'; // 769px - 899px
+    } else {
+      // Granular expanded widths
+      if (windowWidth >= 1400) return '280px';
+      if (windowWidth >= 1200) return '260px';
+      if (windowWidth >= 1024) return '240px';
+      if (windowWidth >= 900) return '220px';
+      return '200px'; // 769px - 899px
+    }
+  };
+
+
+  // Conversation management functions
+  const createNewConversation = () => {
+    const newConversation = {
+      id: Date.now().toString(),
+      title: 'New Conversation',
+      messages: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    setConversations(prev => [newConversation, ...prev]);
+    setCurrentConversationId(newConversation.id);
+    setConversationHistory([]);
+    setResults(null);
+    setError('');
+    setShowIndividualResponses({});
+  };
+
+  const switchConversation = (conversationId) => {
+    const conversation = conversations.find(c => c.id === conversationId);
+    if (conversation) {
+      setCurrentConversationId(conversationId);
+      setConversationHistory(conversation.messages);
+      setResults(null);
+      setError('');
+      setShowIndividualResponses({});
+    }
+  };
+
+  const updateConversationTitle = (conversationId, newTitle) => {
+    setConversations(prev => 
+      prev.map(conv => 
+        conv.id === conversationId 
+          ? { ...conv, title: newTitle, updatedAt: new Date().toISOString() }
+          : conv
+      )
+    );
+  };
+
+  const deleteConversation = (conversationId) => {
+    setConversations(prev => prev.filter(c => c.id !== conversationId));
+    if (currentConversationId === conversationId) {
+      if (conversations.length > 1) {
+        const remainingConversations = conversations.filter(c => c.id !== conversationId);
+        switchConversation(remainingConversations[0].id);
+      } else {
+        createNewConversation();
+      }
+    }
+  };
+
+  // Initialize app
   useEffect(() => {
     // Check backend health on component mount
     axios.get(`${API_BASE_URL}/api/health`)
@@ -42,7 +142,36 @@ function App() {
         console.error('Error connecting to backend:', error);
         setHealthStatus('Error connecting to backend');
       });
+    
+    // Load conversations from localStorage on mount
+    const savedConversations = localStorage.getItem('kosma-conversations');
+    if (savedConversations) {
+      try {
+        const parsed = JSON.parse(savedConversations);
+        setConversations(parsed);
+        if (parsed.length > 0) {
+          setCurrentConversationId(parsed[0].id);
+          setConversationHistory(parsed[0].messages);
+        } else {
+          // Create initial conversation if saved but empty
+          createNewConversation();
+        }
+      } catch (error) {
+        console.error('Error loading conversations:', error);
+        createNewConversation();
+      }
+    } else {
+      // Create initial conversation if none exist
+      createNewConversation();
+    }
   }, []);
+
+  // Save conversations to localStorage
+  useEffect(() => {
+    if (conversations.length > 0) {
+      localStorage.setItem('kosma-conversations', JSON.stringify(conversations));
+    }
+  }, [conversations]);
 
   // Auto-resize textarea with responsive limits
   useEffect(() => {
@@ -53,17 +182,17 @@ function App() {
     }
   }, [prompt, isMobile]);
 
-  // Scroll to bottom when new results appear
+  // Scroll to bottom when new messages appear - using window scroll
   useEffect(() => {
-    if (results && chatContainerRef.current) {
+    if (conversationHistory.length > 0) {
       setTimeout(() => {
-        chatContainerRef.current.scrollTo({
-          top: chatContainerRef.current.scrollHeight,
+        window.scrollTo({
+          top: document.documentElement.scrollHeight,
           behavior: 'smooth'
         });
       }, 100);
     }
-  }, [results]);
+  }, [conversationHistory.length]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -78,30 +207,53 @@ function App() {
       return;
     }
 
+    // Store prompt before clearing
+    const currentPrompt = prompt.trim();
+    setPrompt('');
+
     const userMessage = {
       type: 'user',
-      content: prompt.trim(),
+      content: currentPrompt,
       timestamp: new Date().toISOString()
     };
 
+    // Ensure we have a current conversation
+    let activeConversationId = currentConversationId;
+    if (!activeConversationId) {
+      // Create new conversation synchronously
+      const newConvId = Date.now().toString();
+      const newConversation = {
+        id: newConvId,
+        title: 'New Conversation',
+        messages: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      setConversations(prev => [newConversation, ...prev]);
+      setCurrentConversationId(newConvId);
+      activeConversationId = newConvId;
+    }
+
     // Add user message to conversation
-    setConversationHistory(prev => [...prev, userMessage]);
+    const newHistory = [...conversationHistory, userMessage];
+    setConversationHistory(newHistory);
     setLoading(true);
     setError('');
     setResults(null);
     setShowIndividual(false);
 
-    // Clear the input
-    const currentPrompt = prompt.trim();
-    setPrompt('');
+    // Update conversation title from first message  
+    // Note: Skip title update for now since conversations state might not be updated yet
+    // The title will be updated when the conversation is saved to localStorage
 
     try {
-      console.log('Sending request to backend...');
+      console.log('🚀 Sending request to backend...', { activeConversationId, currentPrompt });
       const response = await axios.post(`${API_BASE_URL}/api/aggregate`, {
         prompt: currentPrompt
       });
 
-      console.log('Response received:', response.data);
+      console.log('✅ Response received:', response.data);
       
       const aiMessage = {
         type: 'ai',
@@ -109,8 +261,29 @@ function App() {
         timestamp: new Date().toISOString()
       };
 
-      setConversationHistory(prev => [...prev, aiMessage]);
+      const finalHistory = [...newHistory, aiMessage];
+      console.log('📝 Updating conversation history:', finalHistory.length, 'messages');
+      
+      setConversationHistory(finalHistory);
       setResults(response.data);
+
+      // Update conversation with new messages
+      setConversations(prev => {
+        const updated = prev.map(conv => 
+          conv.id === activeConversationId 
+            ? { 
+                ...conv, 
+                messages: finalHistory, 
+                updatedAt: new Date().toISOString(),
+                title: conv.title === 'New Conversation' 
+                  ? (currentPrompt.length > 50 ? currentPrompt.substring(0, 50) + '...' : currentPrompt)
+                  : conv.title
+              }
+            : conv
+        );
+        console.log('💾 Updated conversations:', updated.length);
+        return updated;
+      });
       
     } catch (err) {
       console.error('Error during aggregation:', err);
@@ -130,6 +303,31 @@ function App() {
       handleSubmit(e);
     }
   };
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Cmd/Ctrl + N for new conversation
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        createNewConversation();
+      }
+      
+      // Cmd/Ctrl + [ or ] for sidebar toggle
+      if ((e.metaKey || e.ctrlKey) && (e.key === '[' || e.key === ']')) {
+        e.preventDefault();
+        setSidebarCollapsed(!sidebarCollapsed);
+      }
+
+      // Escape to close sidebar on mobile
+      if (e.key === 'Escape' && isMobile && !sidebarCollapsed) {
+        setSidebarCollapsed(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sidebarCollapsed, isMobile]);
 
   const getConfidenceBadgeColor = (confidence) => {
     if (confidence.includes('High')) return 'high-confidence';
@@ -300,115 +498,116 @@ function App() {
   const emptyState = getEmptyStateContent();
 
   return (
-    <div className="App">
-      <header className="app-header">
-        <div className="header-content">
-          <div>
-            <h1>{isMobile ? '⚡ AI Hub' : '⚡ AI Aggregator'}</h1>
-            <p className="subtitle">
-              {isMobile ? 'KOSMA AI' : 'Powered by KOSMA AI'}
-            </p>
+    <div className="claude-app">
+      {/* Claude-style Sidebar */}
+      <aside className={`claude-sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <div className="sidebar-header">
+          <div className="sidebar-brand">
+            <span className="brand-icon">⚡</span>
+            {!sidebarCollapsed && <span className="brand-text">KOSMA AI</span>}
           </div>
+          <button 
+            className="sidebar-toggle"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!sidebarCollapsed}
+          >
+            {sidebarCollapsed ? '→' : '←'}
+          </button>
+        </div>
+
+        <div className="sidebar-content">
+          <button 
+            className="new-conversation-btn"
+            onClick={createNewConversation}
+            aria-label="Start new conversation"
+          >
+            <span className="btn-icon">+</span>
+            {!sidebarCollapsed && <span>New Conversation</span>}
+          </button>
+
+          {!sidebarCollapsed && (
+            <div className="conversations-list">
+              <div className="conversations-header">Recent</div>
+              {conversations.map(conversation => (
+                <div 
+                  key={conversation.id}
+                  className={`conversation-item ${conversation.id === currentConversationId ? 'active' : ''}`}
+                  onClick={() => switchConversation(conversation.id)}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Switch to conversation: ${conversation.title}`}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      switchConversation(conversation.id);
+                    }
+                  }}
+                >
+                  <div className="conversation-title">{conversation.title}</div>
+                  <div className="conversation-date">
+                    {new Date(conversation.updatedAt).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="sidebar-footer">
           <div className={`health-status ${healthStatus.includes('Error') ? 'error' : 'success'}`}>
             <span className="status-indicator" />
-            <span className="status-text">
-              {healthStatus.includes('Error') ? 'Offline' : 'Online'}
-            </span>
+            {!sidebarCollapsed && (
+              <span className="status-text">
+                {healthStatus.includes('Error') ? 'Offline' : 'Online'}
+              </span>
+            )}
           </div>
         </div>
-      </header>
+      </aside>
 
-      <main className="main-content">
-        <div className="chat-container" ref={chatContainerRef}>
-          {conversationHistory.length === 0 && (
-            <div style={{ 
-              textAlign: 'center', 
-              color: 'var(--text-muted)', 
-              padding: isMobile ? '2rem 1rem' : '4rem 2rem',
-              fontSize: isMobile ? '0.85rem' : '0.95rem'
-            }}>
-              <div style={{ 
-                fontSize: isMobile ? '1.5rem' : '2rem', 
-                marginBottom: isMobile ? '0.75rem' : '1rem' 
-              }}>
-                {emptyState.icon}
+      {/* Claude-style Main Content */}
+      <main className="claude-main"
+        style={{ marginLeft: getSidebarMargin() }}
+      >
+        <div className="claude-chat-container">
+          <div className="claude-messages" ref={chatContainerRef}>
+            {conversationHistory.length === 0 && (
+              <div className="claude-empty-state">
+                <div className="empty-state-icon">{emptyState.icon}</div>
+                <h2 className="empty-state-title">{emptyState.title}</h2>
+                <p className="empty-state-subtitle">{emptyState.subtitle}</p>
               </div>
-              <h3 style={{ 
-                marginBottom: '0.5rem', 
-                color: 'var(--text-secondary)',
-                fontSize: isMobile ? '0.95rem' : '1.1rem'
-              }}>
-                {emptyState.title}
-              </h3>
-              <p style={{ fontSize: isMobile ? '0.8rem' : '0.95rem' }}>
-                {emptyState.subtitle}
-              </p>
-            </div>
-          )}
+            )}
 
-          {conversationHistory.map((message, index) => renderMessage(message, index))}
+            {conversationHistory.map((message, index) => renderMessage(message, index))}
 
-          {loading && (
-            <div className="ai-loading-placeholder">
-              <div className="loading-dots">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-              <span>
-                {isMobile 
-                  ? '🤔 Thinking...' 
-                  : '🤔 Consulting AI models...'}
-              </span>
-            </div>
-          )}
-
-          {error && (
-            <div className="chat-error-message">
-              <strong>Error:</strong> {error}
-            </div>
-          )}
-
-          {results && (
-            <div className="individual-responses-section">
-              <button 
-                onClick={() => setShowIndividual(!showIndividual)}
-                className="toggle-individual-button"
-              >
-                {showIndividual ? '▲' : '▼'} {isMobile ? 'Individual Responses' : 'Individual AI Responses'}
-              </button>
-
-              {showIndividual && (
-                <div className="individual-responses-content">
-                  {Object.entries(results.individualResponses).map(([service, response]) => (
-                    <div key={service} className={`individual-response-item ${response.error ? 'error' : ''}`}>
-                      <h3>
-                        {getSourceIcon(service.charAt(0).toUpperCase() + service.slice(1))} 
-                        {service.charAt(0).toUpperCase() + service.slice(1)}
-                      </h3>
-                      {response.error ? (
-                        <div className="error-content-text">
-                          <strong>Error:</strong> {response.message}
-                        </div>
-                      ) : (
-                        <div className="response-content-text">
-                          {isMobile && response.length > 300 
-                            ? response.substring(0, 300) + '...' 
-                            : response}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+            {loading && (
+              <div className="claude-loading">
+                <div className="loading-dots">
+                  <span></span>
+                  <span></span>
+                  <span></span>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+                <span className="loading-text">
+                  {isMobile 
+                    ? '🤔 Thinking...' 
+                    : '🤔 Consulting AI models...'}
+                </span>
+              </div>
+            )}
 
-        <div className="query-form-wrapper">
-          <form onSubmit={handleSubmit} className="query-form">
-            <div className="input-container">
-              <div className="input-wrapper">
+            {error && (
+              <div className="claude-error">
+                <strong>Error:</strong> {error}
+              </div>
+            )}
+          </div>
+
+          {/* Claude-style Input Area */}
+          <div className="claude-input-container">
+            <form onSubmit={handleSubmit} className="claude-input-form">
+              <div className="claude-input-wrapper">
                 <textarea
                   ref={textareaRef}
                   value={prompt}
@@ -418,35 +617,38 @@ function App() {
                   disabled={loading}
                   maxLength={2000}
                   rows={1}
+                  className="claude-textarea"
                 />
-                <div className="character-count">
-                  {`${prompt.length}/2000`}
+                <div className="claude-input-footer">
+                  <div className="character-count">
+                    {`${prompt.length}/2000`}
+                  </div>
+                  <button 
+                    type="submit" 
+                    disabled={loading || !prompt.trim()}
+                    className="claude-submit-btn"
+                    title="Send message"
+                  >
+                    {loading ? (
+                      <div className="loading-spinner"></div>
+                    ) : (
+                      '→'
+                    )}
+                  </button>
                 </div>
               </div>
-              <button 
-                type="submit" 
-                disabled={loading || !prompt.trim()}
-                className="submit-button"
-                title="Send message"
-              >
-                {loading ? (
-                  <div className="loading-spinner"></div>
-                ) : (
-                  '→'
-                )}
-              </button>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       </main>
 
-      <footer className="app-footer">
-        <p>
-          {isMobile 
-            ? 'KOSMA AI • Multi-model synthesis' 
-            : 'KOSMA AI Aggregator • Synthesizing insights from leading AI models'}
-        </p>
-      </footer>
+      {/* Mobile overlay for sidebar */}
+      {!sidebarCollapsed && isMobile && (
+        <div 
+          className="sidebar-overlay"
+          onClick={() => setSidebarCollapsed(true)}
+        />
+      )}
     </div>
   );
 }
