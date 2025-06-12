@@ -12,6 +12,7 @@
   --claude-text-primary: #2d333a;         /* Claude's primary text */
   --claude-text-secondary: #6b7280;       /* Muted text */
   --claude-text-tertiary: #9ca3af;        /* Very muted text */
+  --claude-text-quaternary: #6b7280;      /* Even more muted for light mode */
   --claude-text-inverse: #ffffff;         /* White text on dark backgrounds */
   
   --claude-border-light: #e5e7eb;         /* Light borders */
@@ -615,6 +616,18 @@ body {
   outline-offset: 2px;
 }
 
+/* Submit button with muted purple when input has content */
+.claude-submit-btn.has-content {
+  background: var(--kosma-secondary);
+  color: var(--claude-text-inverse);
+}
+
+.claude-submit-btn.has-content:hover:not(:disabled) {
+  background: rgba(118, 112, 140, 0.8);
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
 /* ===== MODERN RESPONSIVE BREAKPOINTS WITH FLUID SCALING ===== */
 
 /* Ultra-wide Desktop (2xl - 1536px+) */
@@ -991,7 +1004,7 @@ body {
 
 
 .message-wrapper.user .message-bubble {
-  background: linear-gradient(135deg, var(--kosma-primary) 0%, var(--kosma-primary-hover) 100%);
+  background: var(--kosma-secondary);
   color: var(--claude-text-inverse);
   border-bottom-right-radius: var(--radius-lg);
   /* Add subtle glow effect */
@@ -1204,9 +1217,9 @@ body {
 }
 
 .low-confidence {
-  background: #fef3c7;
-  color: #b45309;
-  border-color: #fbbf24;
+  background: var(--claude-warning-bg);
+  color: var(--claude-warning);
+  border-color: var(--claude-warning);
 }
 
 .error-confidence {
@@ -1223,7 +1236,7 @@ body {
 }
 
 .source-tag {
-  background: linear-gradient(135deg, var(--kosma-primary) 0%, var(--kosma-secondary) 100%);
+  background: var(--kosma-secondary);
   color: white;
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-md);
@@ -1232,6 +1245,12 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  transition: all 0.2s var(--ease-out);
+}
+
+.source-tag:hover {
+  background: rgba(118, 112, 140, 0.8);
+  transform: translateY(-1px);
 }
 
 /* Individual Responses */
@@ -1436,7 +1455,7 @@ body {
 }
 
 .submit-button {
-  background: linear-gradient(135deg, var(--kosma-primary) 0%, var(--kosma-secondary) 100%);
+  background: var(--kosma-secondary);
   color: white;
   border: none;
   width: 44px;
@@ -1452,6 +1471,7 @@ body {
 }
 
 .submit-button:hover:not(:disabled) {
+  background: rgba(118, 112, 140, 0.8);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }
@@ -1720,13 +1740,13 @@ body {
     --claude-bg-sidebar: #1f2937;
     
     --claude-text-primary: #f9fafb;
-    --claude-text-secondary: #d1d5db;
-    --claude-text-tertiary: #9ca3af;
+    --claude-text-secondary: #e5e7eb;
+    --claude-text-tertiary: #f3f4f6;
     --claude-text-inverse: #111827;
     
-    --claude-border-light: #374151;
-    --claude-border-medium: #4b5563;
-    --claude-border-dark: #6b7280;
+    --claude-border-light: #4b5563;
+    --claude-border-medium: #6b7280;
+    --claude-border-dark: #9ca3af;
     
     /* Status colors for dark mode */
     --claude-success: #10b981;
@@ -1753,9 +1773,123 @@ body {
   }
   
   .message-wrapper.user .message-bubble {
-    background: linear-gradient(135deg, var(--kosma-primary) 0%, var(--kosma-secondary) 100%);
-    box-shadow: var(--shadow-lg), 0 0 0 1px rgba(18, 29, 64, 0.3);
+    background: var(--kosma-secondary);
+    box-shadow: var(--shadow-lg), 0 0 0 1px rgba(118, 112, 140, 0.3);
   }
+  
+  /* Better focus indication for dark mode */
+  .claude-input-wrapper:focus-within {
+    border-color: var(--kosma-secondary);
+    box-shadow: 0 0 0 3px rgba(118, 112, 140, 0.4), var(--shadow-lg);
+  }
+  
+  .claude-submit-btn:focus {
+    outline: 2px solid var(--claude-text-secondary);
+    outline-offset: 2px;
+  }
+  
+  /* Enhanced confidence badges for dark mode */
+  .high-confidence {
+    background: var(--claude-success-bg);
+    color: var(--claude-success);
+    border-color: var(--claude-success);
+  }
+  
+  .medium-confidence {
+    background: var(--claude-warning-bg);
+    color: var(--claude-warning);
+    border-color: var(--claude-warning);
+  }
+  
+  .low-confidence {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border-color: #fbbf24;
+  }
+  
+  .error-confidence {
+    background: var(--claude-error-bg);
+    color: var(--claude-error);
+    border-color: var(--claude-error);
+  }
+  
+  /* Better placeholder text contrast in dark mode */
+  .claude-textarea::placeholder {
+    color: var(--claude-text-secondary);
+    opacity: 0.8;
+  }
+  
+  /* Improve disabled button contrast */
+  .claude-submit-btn:disabled {
+    background: var(--claude-border-medium);
+    color: var(--claude-text-secondary);
+    opacity: 0.6;
+  }
+  
+  /* Fix New Conversation button contrast in dark mode */
+  .new-conversation-btn {
+    background: var(--claude-bg-tertiary);
+    color: var(--claude-text-primary);
+    border: 1px solid var(--claude-border-medium);
+  }
+  
+  .new-conversation-btn:hover {
+    background: var(--claude-border-dark);
+    color: var(--claude-text-primary);
+    border-color: var(--claude-border-dark);
+  }
+  
+  .new-conversation-btn:focus {
+    outline: 2px solid var(--claude-text-secondary);
+    outline-offset: 2px;
+  }
+  
+  /* Fix active conversation item contrast using muted purple */
+  .conversation-item.active {
+    background: var(--kosma-secondary);
+    color: var(--claude-text-primary);
+    border: 1px solid rgba(118, 112, 140, 0.3);
+  }
+  
+  .conversation-item.active:hover {
+    background: rgba(118, 112, 140, 0.8);
+    border-color: rgba(118, 112, 140, 0.5);
+  }
+  
+  .conversation-item.active .conversation-date {
+    color: var(--claude-text-secondary);
+    opacity: 0.9;
+  }
+  
+  /* Submit button with muted purple in dark mode */
+  .claude-submit-btn.has-content {
+    background: var(--kosma-secondary);
+    color: var(--claude-text-primary);
+  }
+  
+  .claude-submit-btn.has-content:hover:not(:disabled) {
+    background: rgba(118, 112, 140, 0.8);
+    color: var(--claude-text-primary);
+  }
+  
+  .claude-submit-btn.has-content:focus {
+    outline: 2px solid var(--claude-text-secondary);
+    outline-offset: 2px;
+  }
+}
+
+/* ===== UTILITY CLASSES FOR BETTER CONTRAST ===== */
+.text-high-contrast {
+  color: var(--claude-text-primary) !important;
+}
+
+.text-medium-contrast {
+  color: var(--claude-text-secondary) !important;
+}
+
+.bg-high-contrast {
+  background: var(--claude-bg-secondary) !important;
+  border-color: var(--claude-border-medium) !important;
 }
 
 /* ===== HIGH CONTRAST MODE SUPPORT ===== */
@@ -1764,6 +1898,7 @@ body {
     /* Enhanced contrast colors */
     --claude-text-primary: #000000;
     --claude-text-secondary: #2d333a;
+    --claude-text-tertiary: #2d333a;
     --claude-border-light: #000000;
     --claude-border-medium: #2d333a;
     --kosma-primary: #0a1628;

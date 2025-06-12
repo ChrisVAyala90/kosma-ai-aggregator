@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
+    "start:langchain": "node langchainServer.js",
     "dev": "nodemon server.js",
+    "dev:langchain": "nodemon langchainServer.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -12,10 +14,16 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@langchain/anthropic": "^0.3.22",
+    "@langchain/core": "^0.3.58",
+    "@langchain/google-genai": "^0.2.11",
+    "@langchain/openai": "^0.5.13",
     "axios": "^1.9.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "langchain": "^0.3.28",
+    "zod": "^3.25.62"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

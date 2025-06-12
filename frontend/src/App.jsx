@@ -330,13 +330,21 @@ function App() {
   }, [sidebarCollapsed, isMobile]);
 
   const getConfidenceBadgeColor = (confidence) => {
-    if (confidence.includes('High')) return 'high-confidence';
-    if (confidence.includes('Multiple')) return 'medium-confidence';
-    if (confidence.includes('Diverse')) return 'low-confidence';
+    if (!confidence || typeof confidence !== 'string') return 'error-confidence';
+    
+    const confidenceLower = confidence.toLowerCase();
+    if (confidenceLower.includes('high')) return 'high-confidence';
+    if (confidenceLower.includes('medium') || confidenceLower.includes('multiple')) return 'medium-confidence';
+    if (confidenceLower.includes('low') || confidenceLower.includes('diverse')) return 'low-confidence';
     return 'error-confidence';
   };
 
   const formatSynthesizedAnswer = (text) => {
+    // Check if text is valid before processing
+    if (!text || typeof text !== 'string') {
+      return '<p>No synthesized response available.</p>';
+    }
+    
     // Convert markdown-style formatting to HTML with responsive considerations
     return text
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -383,6 +391,20 @@ function App() {
       );
     } else {
       const data = message.content;
+      
+      // Check if synthesis data exists
+      if (!data || !data.synthesis) {
+        return (
+          <div key={index} className="message-wrapper ai">
+            <div className="message-bubble">
+              <div className="synthesized-content">
+                <p>Error: Invalid response format</p>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      
       return (
         <div key={index} className="message-wrapper ai">
           <div className="message-bubble">
@@ -390,17 +412,17 @@ function App() {
               <div className="synthesis-title">
                 {isMobile ? '🎯 Synthesis' : '🎯 AI Synthesis'}
               </div>
-              <div className={`confidence-badge ${getConfidenceBadgeColor(data.synthesis.confidence)}`}>
+              <div className={`confidence-badge ${getConfidenceBadgeColor(data.synthesis.confidence || 'low')}`}>
                 {isMobile 
-                  ? `${data.synthesis.confidenceScore}%` 
-                  : `${data.synthesis.confidence} (${data.synthesis.confidenceScore}%)`}
+                  ? `${data.synthesis.confidenceScore || 0}%` 
+                  : `${data.synthesis.confidence || 'low'} (${data.synthesis.confidenceScore || 0}%)`}
               </div>
             </div>
             
             <div 
               className="synthesized-content"
               dangerouslySetInnerHTML={{ 
-                __html: formatSynthesizedAnswer(data.synthesis.synthesizedAnswer) 
+                __html: formatSynthesizedAnswer(data.synthesis.synthesizedAnswer || data.synthesis.response) 
               }}
             />
             
@@ -626,7 +648,7 @@ function App() {
                   <button 
                     type="submit" 
                     disabled={loading || !prompt.trim()}
-                    className="claude-submit-btn"
+                    className={`claude-submit-btn${prompt.trim() ? ' has-content' : ''}`}
                     title="Send message"
                   >
                     {loading ? (
